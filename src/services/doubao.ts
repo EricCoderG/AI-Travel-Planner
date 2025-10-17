@@ -1,4 +1,4 @@
-import type { ItineraryDay, ItineraryItem, ItineraryPlan, TravelPreference } from '../types';
+import type { ItineraryDay, ItineraryItem, TravelPreference } from '../types';
 
 interface DoubaoChoice {
   message?: {
@@ -10,9 +10,16 @@ interface DoubaoResponse {
   choices?: DoubaoChoice[];
 }
 
+export interface ParsedBudgetEntry {
+  category: string;
+  amount: number;
+  currency?: string;
+  note?: string;
+}
+
 export const buildPrompt = (preference: TravelPreference): string => {
-  const { destination, startDate, endDate, budget, companions, themes, notes } = preference;
-  return `你是一位专业旅行规划师，请针对以下需求生成详细行程：\n目的地：${destination}\n日期：${startDate} 至 ${endDate}\n预算：${budget} ${preference.currency}\n同行人：${companions}\n偏好：${themes.join(', ')}\n额外备注：${notes ?? '无'}\n\n输出 JSON，格式：{\n  "days": [{"date": "YYYY-MM-DD", "items": [{"time": "08:00", "title": "", "description": "", "category": "交通|景点|餐饮|住宿|其他", "cost": 0, "location": ""}]}],\n  "estimatedBudget": 12345\n}`;
+  const { destination, startDate, endDate, budget, companions, themes, notes, currency } = preference;
+  return `你是一位专业旅行规划师，请针对以下需求生成详细行程：\n目的地：${destination}\n日期：${startDate} 至 ${endDate}\n预算：${budget} ${currency}\n同行人：${companions}\n偏好：${themes.join(', ')}\n额外备注：${notes ?? '无'}\n\n请输出 JSON，包含：\n- days: 每日安排数组，需列出时间、标题、描述、分类(交通|景点|餐饮|住宿|其他)、可选费用与经纬度\n- estimatedBudget: 整体预算数值\n- budgetBreakdown: 预算拆分数组，例如 [{"category":"交通","amount":3000,"currency":"${currency}","note":"往返机票"}]`;
 };
 
 const normalizeItems = (items: any[]): ItineraryItem[] => {
@@ -28,7 +35,21 @@ const normalizeItems = (items: any[]): ItineraryItem[] => {
     }));
 };
 
-const buildFallbackPlan = (preference: TravelPreference): Pick<ItineraryPlan, 'days' | 'estimatedBudget'> => {
+const parseBudgets = (rows: any[], preference: TravelPreference): ParsedBudgetEntry[] => {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  return rows
+    .map((row) => ({
+      category: typeof row.category === 'string' ? row.category : '其他',
+      amount: Number(row.amount) || 0,
+      currency: typeof row.currency === 'string' ? row.currency : preference.currency,
+      note: typeof row.note === 'string' ? row.note : undefined
+    }))
+    .filter((entry) => entry.amount > 0 && entry.category);
+};
+
+const buildFallbackPlan = (preference: TravelPreference): { days: ItineraryDay[]; estimatedBudget: number; budgets: ParsedBudgetEntry[] } => {
   const days: ItineraryDay[] = [];
   if (preference.startDate) {
     const start = new Date(preference.startDate);
@@ -38,10 +59,10 @@ const buildFallbackPlan = (preference: TravelPreference): Pick<ItineraryPlan, 'd
       days.push({ date, items: [] });
     }
   }
-  return { days, estimatedBudget: preference.budget };
+  return { days, estimatedBudget: preference.budget, budgets: [] };
 };
 
-const parsePlan = (content: string, preference: TravelPreference): Pick<ItineraryPlan, 'days' | 'estimatedBudget'> => {
+const parsePlan = (content: string, preference: TravelPreference): { days: ItineraryDay[]; estimatedBudget: number; budgets: ParsedBudgetEntry[] } => {
   try {
     const jsonStart = content.indexOf('{');
     const jsonEnd = content.lastIndexOf('}');
@@ -53,7 +74,8 @@ const parsePlan = (content: string, preference: TravelPreference): Pick<Itinerar
         }))
       : [];
     const estimatedBudget = typeof payload.estimatedBudget === 'number' ? payload.estimatedBudget : preference.budget;
-    return { days, estimatedBudget };
+    const budgets = parseBudgets(payload.budgetBreakdown ?? payload.budgets, preference);
+    return { days, estimatedBudget, budgets };
   } catch (error) {
     console.error('解析豆包响应失败', error);
     return buildFallbackPlan(preference);
@@ -63,7 +85,7 @@ const parsePlan = (content: string, preference: TravelPreference): Pick<Itinerar
 export const requestItineraryPlan = async (
   preference: TravelPreference,
   apiKey: string
-): Promise<Pick<ItineraryPlan, 'days' | 'estimatedBudget'>> => {
+): Promise<{ days: ItineraryDay[]; estimatedBudget: number; budgets: ParsedBudgetEntry[] }> => {
   if (!apiKey) {
     return buildFallbackPlan(preference);
   }
@@ -75,7 +97,7 @@ export const requestItineraryPlan = async (
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'ep-m-20251017102514-xmn6c',
+      model: 'ep-m-20251017162015-5bs96',
       messages: [
         {
           role: 'system',

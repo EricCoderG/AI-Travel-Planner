@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
 import { useSettingsStore } from './useSettingsStore';
 import { getSupabaseClient } from '../services/supabaseClient';
+import type { ParsedBudgetEntry } from '../services/doubao';
 import type { BudgetEntry, ItineraryPlan, TravelPreference } from '../types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -18,9 +19,7 @@ interface PlannerState {
   createPlan: (preference: TravelPreference, name?: string) => Promise<ItineraryPlan | undefined>;
   updatePlan: (plan: ItineraryPlan) => Promise<void>;
   removePlan: (planId: string) => Promise<void>;
-  addBudgetEntry: (entry: Omit<BudgetEntry, 'id' | 'createdAt'>) => Promise<BudgetEntry | undefined>;
-  updateBudgetEntry: (entry: BudgetEntry) => Promise<void>;
-  removeBudgetEntry: (entryId: string) => Promise<void>;
+  replaceBudgetsForPlan: (planId: string, entries: ParsedBudgetEntry[]) => Promise<void>;
   loadInitialData: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
 }
@@ -148,45 +147,35 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
       await client.from('budgets').delete().eq('plan_id', planId).eq('user_id', user.id);
       await refreshFromSupabase(client, user.id);
     },
-    addBudgetEntry: async (input) => {
+    replaceBudgetsForPlan: async (planId, entries) => {
       const { client, user } = requireSupabase();
       if (!client || !user) {
         throw new Error(SUPABASE_REQUIRED_MESSAGE);
       }
-      const entry: BudgetEntry = {
-        ...input,
+
+      const plan = get().plans.find((item) => item.id === planId);
+      const fallbackCurrency = plan?.currency ?? useSettingsStore.getState().defaultCurrency ?? 'CNY';
+      const normalized: BudgetEntry[] = entries.map((entry) => ({
         id: nanoid(),
+        planId,
+        category: entry.category,
+        amount: entry.amount,
+        currency: entry.currency ?? fallbackCurrency,
+        note: entry.note,
         createdAt: new Date().toISOString()
-      };
-      const { error } = await client
-        .from('budgets')
-        .upsert({ id: entry.id, user_id: user.id, plan_id: entry.planId, data: entry });
-      handleSupabaseError(error, set);
-      const budgets = [...get().budgets.filter((item) => item.id !== entry.id), entry];
-      set({ budgets, error: undefined });
-      return entry;
-    },
-    updateBudgetEntry: async (entry) => {
-      const { client, user } = requireSupabase();
-      if (!client || !user) {
-        throw new Error(SUPABASE_REQUIRED_MESSAGE);
+      }));
+
+      const { error: deleteError } = await client.from('budgets').delete().eq('plan_id', planId).eq('user_id', user.id);
+      handleSupabaseError(deleteError, set);
+
+      if (normalized.length) {
+        const payload = normalized.map((entry) => ({ id: entry.id, user_id: user.id, plan_id: planId, data: entry }));
+        const { error: upsertError } = await client.from('budgets').upsert(payload);
+        handleSupabaseError(upsertError, set);
       }
-      const { error } = await client
-        .from('budgets')
-        .upsert({ id: entry.id, user_id: user.id, plan_id: entry.planId, data: entry });
-      handleSupabaseError(error, set);
-      const budgets = get().budgets.map((item) => (item.id === entry.id ? entry : item));
+
+      const budgets = [...get().budgets.filter((entry) => entry.planId !== planId), ...normalized];
       set({ budgets, error: undefined });
-    },
-    removeBudgetEntry: async (entryId) => {
-      const { client, user } = requireSupabase();
-      if (!client || !user) {
-        throw new Error(SUPABASE_REQUIRED_MESSAGE);
-      }
-      const prevBudgets = get().budgets;
-      set({ budgets: prevBudgets.filter((item) => item.id !== entryId), error: undefined });
-      const { error } = await client.from('budgets').delete().eq('id', entryId).eq('user_id', user.id);
-      handleSupabaseError(error, set);
     },
     loadInitialData: async () => {
       set({ loading: true, error: undefined });

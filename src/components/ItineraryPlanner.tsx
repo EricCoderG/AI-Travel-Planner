@@ -79,8 +79,11 @@ const ItineraryPlanner = () => {
   const [status, setStatus] = useState<'idle' | 'success' | 'empty'>('idle');
   const defaultCurrency = useSettingsStore((state) => state.defaultCurrency);
   const doubaoKey = useSettingsStore((state) => state.doubaoApiKey);
-  const createPlan = usePlannerStore((state) => state.createPlan);
-  const updatePlan = usePlannerStore((state) => state.updatePlan);
+  const { createPlan, updatePlan, replaceBudgetsForPlan } = usePlannerStore((state) => ({
+    createPlan: state.createPlan,
+    updatePlan: state.updatePlan,
+    replaceBudgetsForPlan: state.replaceBudgetsForPlan
+  }));
   const [form, setForm] = useState<PlannerForm>(() => createInitialPreference(defaultCurrency));
   const [error, setError] = useState<string | undefined>();
 
@@ -109,6 +112,7 @@ const ItineraryPlanner = () => {
       const aiResult = await requestItineraryPlan(preference, doubaoKey);
       const days = aiResult.days.length ? aiResult.days : plan.days;
       await updatePlan({ ...plan, days, estimatedBudget: aiResult.estimatedBudget });
+      await replaceBudgetsForPlan(plan.id, aiResult.budgets);
       const hasContent = days.some((day) => day.items.length > 0);
       return { hasContent, planId: plan.id };
     }

@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePlannerStore } from '../store/usePlannerStore';
 import { exportPlanAsJson, exportPlanAsPdf } from '../utils/exporters';
 
 const PlanViewer = () => {
   const { plans, activePlanId, setActivePlan, budgets } = usePlannerStore((state) => ({ plans: state.plans, activePlanId: state.activePlanId, setActivePlan: state.setActivePlan, budgets: state.budgets }));
+  const navigate = useNavigate();
   const activePlan = useMemo(() => plans.find((item) => item.id === activePlanId) ?? plans[0], [plans, activePlanId]);
   const hasContent = useMemo(() => activePlan?.days.some((day) => day.items.length > 0) ?? false, [activePlan]);
 
@@ -28,7 +30,14 @@ const PlanViewer = () => {
         <div className="plan-actions">
           <button type="button" className="link" onClick={() => exportPlanAsPdf(activePlan, budgets)}>导出 PDF</button>
           <button type="button" className="link" onClick={() => exportPlanAsJson(activePlan, budgets)}>导出 JSON</button>
-          <select value={activePlan.id} onChange={(event) => setActivePlan(event.target.value)}>
+          <select
+            value={activePlan.id}
+            onChange={(event) => {
+              const value = event.target.value;
+              setActivePlan(value);
+              navigate(`/plans/${value}`);
+            }}
+          >
             {plans.map((plan) => (
               <option key={plan.id} value={plan.id}>
                 {plan.name}
