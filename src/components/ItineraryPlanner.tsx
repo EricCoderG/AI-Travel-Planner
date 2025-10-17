@@ -87,7 +87,7 @@ const ItineraryPlanner = () => {
 
   const isFormValid = useMemo(() => form.destination && form.startDate && form.endDate, [form]);
 
-  const mutation = useMutation({
+  const mutation = useMutation<{ hasContent: boolean }, Error, PlannerForm>({
     mutationFn: async (payload: PlannerForm) => {
       const preference: TravelPreference = {
         destination: payload.destination,
@@ -104,7 +104,10 @@ const ItineraryPlanner = () => {
         throw new Error('创建行程失败');
       }
       const aiResult = await requestItineraryPlan(preference, doubaoKey);
-      await updatePlan({ ...plan, days: aiResult.days.length ? aiResult.days : plan.days, estimatedBudget: aiResult.estimatedBudget });
+      const days = aiResult.days.length ? aiResult.days : plan.days;
+      await updatePlan({ ...plan, days, estimatedBudget: aiResult.estimatedBudget });
+      const hasContent = days.some((day) => day.items.length > 0);
+      return { hasContent };
     }
   });
 
@@ -116,8 +119,9 @@ const ItineraryPlanner = () => {
       return;
     }
     try {
-      await mutation.mutateAsync(form);
+      const result = await mutation.mutateAsync(form);
       setForm(createInitialPreference(defaultCurrency));
+      setError(result.hasContent ? undefined : 'AI 未生成行程，请手动补充。');
     } catch (err) {
       setError((err as Error).message);
     }

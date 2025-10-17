@@ -29,19 +29,14 @@ const normalizeItems = (items: any[]): ItineraryItem[] => {
 };
 
 const buildFallbackPlan = (preference: TravelPreference): Pick<ItineraryPlan, 'days' | 'estimatedBudget'> => {
-  const start = new Date(preference.startDate);
-  const end = preference.endDate ? new Date(preference.endDate) : new Date(preference.startDate);
   const days: ItineraryDay[] = [];
-  for (let current = new Date(start); current <= end; current.setDate(current.getDate() + 1)) {
-    const date = current.toISOString().slice(0, 10);
-    days.push({
-      date,
-      items: [
-        { time: '09:00', title: '城市探索', description: '参观当地热门景点', category: '景点', cost: undefined, location: preference.destination },
-        { time: '12:00', title: '特色午餐', description: '尝试当地特色美食', category: '餐饮', cost: undefined },
-        { time: '15:00', title: '自由活动', description: '根据个人喜好安排购物或休息', category: '其他', cost: undefined }
-      ]
-    });
+  if (preference.startDate) {
+    const start = new Date(preference.startDate);
+    const end = preference.endDate ? new Date(preference.endDate) : new Date(preference.startDate);
+    for (let time = start.getTime(); time <= end.getTime(); time += 24 * 60 * 60 * 1000) {
+      const date = new Date(time).toISOString().slice(0, 10);
+      days.push({ date, items: [] });
+    }
   }
   return { days, estimatedBudget: preference.budget };
 };
@@ -80,7 +75,7 @@ export const requestItineraryPlan = async (
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'ep-20240531150607-arobm',
+      model: 'ep-m-20251017102514-xmn6c',
       messages: [
         {
           role: 'system',

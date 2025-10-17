@@ -5,6 +5,7 @@ import { exportPlanAsJson, exportPlanAsPdf } from '../utils/exporters';
 const PlanViewer = () => {
   const { plans, activePlanId, setActivePlan, budgets } = usePlannerStore((state) => ({ plans: state.plans, activePlanId: state.activePlanId, setActivePlan: state.setActivePlan, budgets: state.budgets }));
   const activePlan = useMemo(() => plans.find((item) => item.id === activePlanId) ?? plans[0], [plans, activePlanId]);
+  const hasContent = useMemo(() => activePlan?.days.some((day) => day.items.length > 0) ?? false, [activePlan]);
 
   if (!activePlan) {
     return (
@@ -41,6 +42,7 @@ const PlanViewer = () => {
         {activePlan.preference.companions && <span>同行：{activePlan.preference.companions}</span>}
         {!!activePlan.preference.themes.length && <span>偏好：{activePlan.preference.themes.join(' / ')}</span>}
       </div>
+      {!hasContent && <p className="hint">AI 暂未生成行程，请手动补充或稍后重试。</p>}
       <div className="plan-days">
         {activePlan.days.map((day) => (
           <div key={day.date} className="plan-day">
