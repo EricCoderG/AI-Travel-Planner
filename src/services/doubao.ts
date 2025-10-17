@@ -26,20 +26,80 @@ export interface DoubaoPlanResult {
 
 export const buildPrompt = (preference: TravelPreference): string => {
   const { destination, startDate, endDate, budget, companions, themes, notes, currency } = preference;
-  return `你是一位专业旅行规划师，请针对以下需求生成详细行程：\n目的地：${destination}\n日期：${startDate} 至 ${endDate}\n预算：${budget} ${currency}\n同行人：${companions}\n偏好：${themes.join(', ')}\n额外备注：${notes ?? '无'}\n\n请输出 JSON，包含：\n- days: 每日安排数组，需列出时间、标题、描述、分类(交通|景点|餐饮|住宿|其他)、可选费用与经纬度\n- estimatedBudget: 整体预算数值\n- budgetBreakdown: 预算拆分数组，例如 [{"category":"交通","amount":3000,"currency":"${currency}","note":"往返机票"}]`;
+  return [
+    '你是一位专业旅行规划师，请针对以下需求生成详细行程：',
+    `目的地：${destination}`,
+    `日期：${startDate} 至 ${endDate}`,
+    `预算：${budget} ${currency}`,
+    `同行人：${companions}`,
+    `偏好：${themes.join(', ')}`,
+    `额外备注：${notes ?? '无'}`,
+    '',
+    '严格输出如下 JSON 结构，禁止出现未定义的键：',
+    '{',
+    '  "days": [',
+    '    {',
+    '      "date": "YYYY-MM-DD",',
+    '      "items": [',
+    '        {',
+    '          "time": "字符串",',
+    '          "title": "字符串",',
+    '          "description": "字符串",',
+    '          "category": "交通"|"景点"|"餐饮"|"住宿"|"其他",',
+    '          "cost": 数值,',
+    '          "location": "经度,纬度" 或 null',
+    '        }',
+    '      ]',
+    '    }',
+    '  ],',
+    '  "estimatedBudget": 数值,',
+    '  "budgetBreakdown": [',
+    '    {',
+    '      "category": "交通"|"景点"|"餐饮"|"住宿"|"其他",',
+    '      "amount": 数值,',
+    `      "currency": "${currency}",`,
+    '      "note": "字符串"',
+    '    }',
+    '  ]',
+    '}',
+    '',
+    '请勿使用 activities、events、time 等其他键名表示每日安排，确保 items 数组存在且字段齐全。'
+  ].join('\n');
 };
 
-const normalizeItems = (items: any[]): ItineraryItem[] => {
+const normalizeItems = (items: any[], preference: TravelPreference): ItineraryItem[] => {
   return items
     .filter(Boolean)
-    .map((item) => ({
-      time: item.time ?? '待定',
-      title: item.title ?? '未命名活动',
-      description: item.description ?? '',
-      category: ['交通', '景点', '餐饮', '住宿', '其他'].includes(item.category) ? item.category : '其他',
-      cost: typeof item.cost === 'number' ? item.cost : undefined,
-      location: item.location
-    }));
+    .map((item) => {
+      const latitude = typeof item.latitude === 'number' ? item.latitude : undefined;
+      const longitude = typeof item.longitude === 'number' ? item.longitude : undefined;
+      const location = item.location
+        ? item.location
+        : latitude !== undefined && longitude !== undefined
+          ? `${longitude},${latitude}`
+          : undefined;
+
+      const rawCategory = item.category ?? item.type;
+      const category: ItineraryItem['category'] = ['交通', '景点', '餐饮', '住宿', '其他'].includes(rawCategory)
+        ? rawCategory
+        : '其他';
+
+      const cost =
+        typeof item.cost === 'number'
+          ? item.cost
+          : typeof item.optionalCost === 'number'
+            ? item.optionalCost
+            : undefined;
+
+      return {
+        time: item.time ?? item.slot ?? '待定',
+        title: item.title ?? item.name ?? `${preference.destination} 活动`,
+        description: item.description ?? item.details ?? '',
+        category,
+        cost,
+        location
+      } satisfies ItineraryItem;
+    });
 };
 
 const parseBudgets = (rows: any[], preference: TravelPreference): ParsedBudgetEntry[] => {
@@ -75,10 +135,22 @@ const parsePlan = (content: string, preference: TravelPreference): DoubaoPlanRes
     const jsonEnd = content.lastIndexOf('}');
     const payload = JSON.parse(content.slice(jsonStart, jsonEnd + 1));
     const days: ItineraryDay[] = Array.isArray(payload.days)
-      ? payload.days.map((day: any) => ({
-          date: day.date ?? preference.startDate,
-          items: Array.isArray(day.items) ? normalizeItems(day.items) : []
-        }))
+      ? payload.days.map((day: any) => {
+          const rawItemsSource = Array.isArray(day.items)
+            ? day.items
+            : Array.isArray(day.activities)
+                ? day.activities
+                : Array.isArray(day.events)
+                    ? day.events
+                    : undefined;
+          const rawItems = rawItemsSource ?? [day];
+          const rawDate = day.date ?? day.time ?? day.title ?? preference.startDate;
+          const dateString = typeof rawDate === 'string' && rawDate.length ? rawDate : preference.startDate;
+          return {
+            date: dateString,
+            items: normalizeItems(rawItems, preference)
+          };
+        })
       : [];
     const estimatedBudget = typeof payload.estimatedBudget === 'number' ? payload.estimatedBudget : preference.budget;
     const budgets = parseBudgets(payload.budgetBreakdown ?? payload.budgets, preference);
