@@ -17,6 +17,13 @@ export interface ParsedBudgetEntry {
   note?: string;
 }
 
+export interface DoubaoPlanResult {
+  days: ItineraryDay[];
+  estimatedBudget: number;
+  budgets: ParsedBudgetEntry[];
+  rawContent: string;
+}
+
 export const buildPrompt = (preference: TravelPreference): string => {
   const { destination, startDate, endDate, budget, companions, themes, notes, currency } = preference;
   return `你是一位专业旅行规划师，请针对以下需求生成详细行程：\n目的地：${destination}\n日期：${startDate} 至 ${endDate}\n预算：${budget} ${currency}\n同行人：${companions}\n偏好：${themes.join(', ')}\n额外备注：${notes ?? '无'}\n\n请输出 JSON，包含：\n- days: 每日安排数组，需列出时间、标题、描述、分类(交通|景点|餐饮|住宿|其他)、可选费用与经纬度\n- estimatedBudget: 整体预算数值\n- budgetBreakdown: 预算拆分数组，例如 [{"category":"交通","amount":3000,"currency":"${currency}","note":"往返机票"}]`;
@@ -49,7 +56,7 @@ const parseBudgets = (rows: any[], preference: TravelPreference): ParsedBudgetEn
     .filter((entry) => entry.amount > 0 && entry.category);
 };
 
-const buildFallbackPlan = (preference: TravelPreference): { days: ItineraryDay[]; estimatedBudget: number; budgets: ParsedBudgetEntry[] } => {
+const buildFallbackPlan = (preference: TravelPreference): DoubaoPlanResult => {
   const days: ItineraryDay[] = [];
   if (preference.startDate) {
     const start = new Date(preference.startDate);
@@ -59,10 +66,10 @@ const buildFallbackPlan = (preference: TravelPreference): { days: ItineraryDay[]
       days.push({ date, items: [] });
     }
   }
-  return { days, estimatedBudget: preference.budget, budgets: [] };
+  return { days, estimatedBudget: preference.budget, budgets: [], rawContent: '' };
 };
 
-const parsePlan = (content: string, preference: TravelPreference): { days: ItineraryDay[]; estimatedBudget: number; budgets: ParsedBudgetEntry[] } => {
+const parsePlan = (content: string, preference: TravelPreference): DoubaoPlanResult => {
   try {
     const jsonStart = content.indexOf('{');
     const jsonEnd = content.lastIndexOf('}');
@@ -75,7 +82,7 @@ const parsePlan = (content: string, preference: TravelPreference): { days: Itine
       : [];
     const estimatedBudget = typeof payload.estimatedBudget === 'number' ? payload.estimatedBudget : preference.budget;
     const budgets = parseBudgets(payload.budgetBreakdown ?? payload.budgets, preference);
-    return { days, estimatedBudget, budgets };
+    return { days, estimatedBudget, budgets, rawContent: content };
   } catch (error) {
     console.error('解析豆包响应失败', error);
     return buildFallbackPlan(preference);
@@ -84,8 +91,9 @@ const parsePlan = (content: string, preference: TravelPreference): { days: Itine
 
 export const requestItineraryPlan = async (
   preference: TravelPreference,
-  apiKey: string
-): Promise<{ days: ItineraryDay[]; estimatedBudget: number; budgets: ParsedBudgetEntry[] }> => {
+  apiKey: string,
+  prompt?: string
+): Promise<DoubaoPlanResult> => {
   if (!apiKey) {
     return buildFallbackPlan(preference);
   }
@@ -103,7 +111,7 @@ export const requestItineraryPlan = async (
           role: 'system',
           content: '你是旅行规划助手，擅长将用户需求转化为结构化行程。'
         },
-        { role: 'user', content: buildPrompt(preference) }
+        { role: 'user', content: prompt ?? buildPrompt(preference) }
       ],
       response_format: { type: 'json_object' }
     })

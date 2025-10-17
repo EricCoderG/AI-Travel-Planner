@@ -20,6 +20,7 @@ interface PlannerState {
   updatePlan: (plan: ItineraryPlan) => Promise<void>;
   removePlan: (planId: string) => Promise<void>;
   replaceBudgetsForPlan: (planId: string, entries: ParsedBudgetEntry[]) => Promise<void>;
+  logAiGeneration: (payload: { planId: string; prompt: string; response: string }) => Promise<void>;
   loadInitialData: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
 }
@@ -176,6 +177,22 @@ export const usePlannerStore = create<PlannerState>((set, get) => {
 
       const budgets = [...get().budgets.filter((entry) => entry.planId !== planId), ...normalized];
       set({ budgets, error: undefined });
+    },
+    logAiGeneration: async ({ planId, prompt, response }) => {
+      const { client, user } = requireSupabase();
+      if (!client || !user) {
+        throw new Error(SUPABASE_REQUIRED_MESSAGE);
+      }
+      const logRecord = {
+        id: nanoid(),
+        user_id: user.id,
+        plan_id: planId,
+        prompt,
+        response,
+        created_at: new Date().toISOString()
+      };
+      const { error } = await client.from('ai_generation_logs').insert(logRecord);
+      handleSupabaseError(error, set);
     },
     loadInitialData: async () => {
       set({ loading: true, error: undefined });

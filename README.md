@@ -62,6 +62,22 @@ create policy "Budgets: user owns row"
   on budgets for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+create table ai_generation_logs (
+  id text primary key,
+  user_id uuid not null references auth.users(id),
+  plan_id text references plans(id) on delete set null,
+  prompt text not null,
+  response text,
+  created_at timestamp default now()
+);
+
+alter table ai_generation_logs enable row level security;
+
+create policy "Logs: user owns row"
+  on ai_generation_logs for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 ```
 - 请在 Supabase Authentication 中开启 Email 登录。
 - 前端会使用 `plans.data` 与 `budgets.data` 字段存储完整 JSON，所有 CRUD 操作都作用于上述表。
@@ -75,6 +91,7 @@ create policy "Budgets: user owns row"
 4. **查看与编辑详情**：跳转到“行程列表/行程详情”查看每日安排、地图与导出按钮。
 5. **查看预算**：进入“预算管理”或行程详情页，查看 AI 生成的预算拆分与总额。
 6. **地图查看**：为行程项目填写“经度,纬度”形式的 `location` 字段（例如 `116.3974,39.9093`）即可在地图中呈现。
+7. **调试日志**：`ai_generation_logs` 表会记录每次调用豆包 API 的 prompt 与响应，便于追踪生成结果。
 
 ## 导出与备份
 - 在“行程详情”页面顶部，可导出当前行程的 PDF 或 JSON。

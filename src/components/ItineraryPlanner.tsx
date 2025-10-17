@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useMutation } from '@tanstack/react-query';
-import { requestItineraryPlan } from '../services/doubao';
+import { buildPrompt, requestItineraryPlan } from '../services/doubao';
 import VoiceInput from './VoiceInput';
 import { usePlannerStore } from '../store/usePlannerStore';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -79,10 +79,11 @@ const ItineraryPlanner = () => {
   const [status, setStatus] = useState<'idle' | 'success' | 'empty'>('idle');
   const defaultCurrency = useSettingsStore((state) => state.defaultCurrency);
   const doubaoKey = useSettingsStore((state) => state.doubaoApiKey);
-  const { createPlan, updatePlan, replaceBudgetsForPlan } = usePlannerStore((state) => ({
+  const { createPlan, updatePlan, replaceBudgetsForPlan, logAiGeneration } = usePlannerStore((state) => ({
     createPlan: state.createPlan,
     updatePlan: state.updatePlan,
-    replaceBudgetsForPlan: state.replaceBudgetsForPlan
+    replaceBudgetsForPlan: state.replaceBudgetsForPlan,
+    logAiGeneration: state.logAiGeneration
   }));
   const [form, setForm] = useState<PlannerForm>(() => createInitialPreference(defaultCurrency));
   const [error, setError] = useState<string | undefined>();
@@ -109,10 +110,12 @@ const ItineraryPlanner = () => {
       if (!plan) {
         throw new Error('创建行程失败');
       }
-      const aiResult = await requestItineraryPlan(preference, doubaoKey);
+      const prompt = buildPrompt(preference);
+      const aiResult = await requestItineraryPlan(preference, doubaoKey, prompt);
       const days = aiResult.days.length ? aiResult.days : plan.days;
       await updatePlan({ ...plan, days, estimatedBudget: aiResult.estimatedBudget });
       await replaceBudgetsForPlan(plan.id, aiResult.budgets);
+      await logAiGeneration({ planId: plan.id, prompt, response: aiResult.rawContent });
       const hasContent = days.some((day) => day.items.length > 0);
       return { hasContent, planId: plan.id };
     }
