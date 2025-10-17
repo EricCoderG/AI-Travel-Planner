@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import PlannerPage from './pages/PlannerPage';
+import PlansListPage from './pages/PlansListPage';
+import PlanDetailPage from './pages/PlanDetailPage';
 import BudgetPage from './pages/BudgetPage';
 import SettingsPage from './pages/SettingsPage';
 import AuthPage from './pages/AuthPage';
@@ -39,6 +41,9 @@ const App = () => {
           <NavLink to="/planner" className={({ isActive }) => (isActive ? 'active' : '')}>
             智能规划
           </NavLink>
+          <NavLink to="/plans" className={({ isActive }) => (isActive ? 'active' : '')}>
+            行程列表
+          </NavLink>
           <NavLink to="/budget" className={({ isActive }) => (isActive ? 'active' : '')}>
             预算管理
           </NavLink>
@@ -54,6 +59,8 @@ const App = () => {
         <Routes location={location}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/planner" element={<PlannerPage />} />
+          <Route path="/plans" element={<PlansListPage />} />
+          <Route path="/plans/:planId" element={<PlanDetailPage />} />
           <Route path="/budget" element={<BudgetPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/auth" element={<AuthPage />} />

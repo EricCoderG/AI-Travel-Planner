@@ -286,3 +286,66 @@ button {
   color: #4b5563;
   font-size: 14px;
 }
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dashboard-plan-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dashboard-plan-row:last-child {
+  border-bottom: none;
+}
+
+.plans-table-head,
+.plans-table-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 2fr 2fr 1fr 1fr;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.plans-table-head {
+  font-weight: 600;
+  color: #4b5563;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.plans-table-row {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.plans-table-row:last-child {
+  border-bottom: none;
+}
+
+.planner-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #2563eb;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.secondary-link:hover {
+  background: rgba(37, 99, 235, 0.08);
+}

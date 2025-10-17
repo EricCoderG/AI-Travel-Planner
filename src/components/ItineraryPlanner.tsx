@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useMutation } from '@tanstack/react-query';
 import { requestItineraryPlan } from '../services/doubao';
@@ -74,6 +75,8 @@ const createInitialPreference = (currency: string): PlannerForm => ({
 });
 
 const ItineraryPlanner = () => {
+  const [lastPlanId, setLastPlanId] = useState<string | undefined>();
+  const [status, setStatus] = useState<'idle' | 'success' | 'empty'>('idle');
   const defaultCurrency = useSettingsStore((state) => state.defaultCurrency);
   const doubaoKey = useSettingsStore((state) => state.doubaoApiKey);
   const createPlan = usePlannerStore((state) => state.createPlan);
@@ -87,7 +90,7 @@ const ItineraryPlanner = () => {
 
   const isFormValid = useMemo(() => form.destination && form.startDate && form.endDate, [form]);
 
-  const mutation = useMutation<{ hasContent: boolean }, Error, PlannerForm>({
+  const mutation = useMutation<{ hasContent: boolean; planId: string }, Error, PlannerForm>({
     mutationFn: async (payload: PlannerForm) => {
       const preference: TravelPreference = {
         destination: payload.destination,
@@ -107,13 +110,15 @@ const ItineraryPlanner = () => {
       const days = aiResult.days.length ? aiResult.days : plan.days;
       await updatePlan({ ...plan, days, estimatedBudget: aiResult.estimatedBudget });
       const hasContent = days.some((day) => day.items.length > 0);
-      return { hasContent };
+      return { hasContent, planId: plan.id };
     }
   });
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(undefined);
+    setStatus('idle');
+    setLastPlanId(undefined);
     if (!isFormValid) {
       setError('请完整填写目的地与日期');
       return;
@@ -121,9 +126,11 @@ const ItineraryPlanner = () => {
     try {
       const result = await mutation.mutateAsync(form);
       setForm(createInitialPreference(defaultCurrency));
-      setError(result.hasContent ? undefined : 'AI 未生成行程，请手动补充。');
+      setLastPlanId(result.planId);
+      setStatus(result.hasContent ? 'success' : 'empty');
     } catch (err) {
       setError((err as Error).message);
+      setStatus('idle');
     }
   };
 
@@ -211,10 +218,18 @@ const ItineraryPlanner = () => {
       </label>
       {error && <p className="error">{error}</p>}
       {!doubaoKey && <p className="hint">未填写豆包 API Key 时，将使用默认模板生成行程。</p>}
+      {mutation.isPending && <p className="hint">AI 正在生成行程，请稍候...</p>}
+      {status === 'success' && lastPlanId && <p className="hint">AI 已生成行程，点击下方按钮查看详细安排。</p>}
+      {status === 'empty' && <p className="error">AI 未生成具体安排，请前往详情页手动补充。</p>}
       <p className="hint">语音识别结果会自动填充表单字段，可手动调整。</p>
-      <button type="submit" className="primary" disabled={mutation.isPending}>
-        {mutation.isPending ? 'AI 正在生成...' : '生成行程'}
-      </button>
+      <div className="planner-actions">
+        <button type="submit" className="primary" disabled={mutation.isPending}>
+          {mutation.isPending ? 'AI 正在生成...' : '生成行程'}
+        </button>
+        {lastPlanId && (
+          <Link className="secondary-link" to={`/plans/${lastPlanId}`}>查看行程详情</Link>
+        )}
+      </div>
     </form>
   );
 };
