@@ -262,6 +262,17 @@ button {
   margin-bottom: 12px;
 }
 
+.voice-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voice-transcript textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
 .plan-actions {
   display: flex;
   gap: 12px;

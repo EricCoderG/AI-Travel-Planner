@@ -10,51 +10,79 @@ import type { TravelPreference } from '../types';
 
 
 const parseVoiceTranscript = (value: string, current: PlannerForm): Partial<PlannerForm> => {
-  const normalized = value.replace(/[，,]/g, '|');
-  const segments = normalized.split('|').map((item) => item.trim()).filter(Boolean);
   const patch: Partial<PlannerForm> = { notes: value };
-  if (segments[0]) {
-    patch.destination = segments[0];
+  const normalized = value.replace(/[，。,、]/g, ' ');
+
+  // 目的地：寻找“去XXX”模式，避免误捕后续文本
+  const destinationRegex = /去(?<dest>[\u4e00-\u9fa5A-Za-z\s]{1,20})(?:玩|旅游|旅行)?/;
+  const destinationMatch = normalized.match(destinationRegex);
+  if (destinationMatch?.groups?.dest) {
+    patch.destination = destinationMatch.groups.dest.trim();
   }
-  const dateMatch = value.match(/(\d{4}-\d{2}-\d{2})/g);
+
+  // 时间：日期或天数
+  const dateMatch = value.match(/(\d{4}[年/-]\d{1,2}[月/-]\d{1,2})/g);
   if (dateMatch && dateMatch.length) {
-    patch.startDate = dateMatch[0];
-    if (dateMatch[1]) {
-      patch.endDate = dateMatch[1];
+    const [startRaw, endRaw] = dateMatch;
+    const normalizeDate = (input: string) => input.replace(/年|月/g, '-').replace(/日|号/g, '');
+    patch.startDate = normalizeDate(startRaw);
+    if (endRaw) {
+      patch.endDate = normalizeDate(endRaw);
     }
   }
-  const durationSegment = segments.find((item) => item.includes('天'));
-  if (durationSegment) {
-    const daysMatch = durationSegment.match(/(\d+)/);
-    if (daysMatch) {
-      const days = Number(daysMatch[1]);
-      const start = patch.startDate ?? current.startDate;
-      if (start) {
-        const end = dayjs(start).add(Math.max(days - 1, 0), 'day');
-        patch.endDate = end.format('YYYY-MM-DD');
-      }
+  const durationMatch = value.match(/(\d+)(?:个)?天/);
+  if (durationMatch) {
+    const days = Number(durationMatch[1]);
+    const start = patch.startDate ?? current.startDate;
+    if (start) {
+      const end = dayjs(start).add(Math.max(days - 1, 0), 'day');
+      patch.endDate = end.format('YYYY-MM-DD');
     }
   }
-  const budgetSegment = segments.find((item) => item.includes('元') || item.toLowerCase().includes('rmb') || item.includes('万'));
-  if (budgetSegment) {
-    const numberMatch = budgetSegment.match(/(\d+(?:\.\d+)?)/);
-    if (numberMatch) {
-      const amount = Number(numberMatch[1]);
-      if (budgetSegment.includes('万')) {
-        patch.budget = amount * 10000;
-      } else {
-        patch.budget = amount;
-      }
+
+  // 预算
+  const budgetRegex = /预算[\s]*([\d\.]+)(万)?(元|块|人民币|rmb)?/i;
+  const budgetMatch = normalized.match(budgetRegex);
+  if (budgetMatch) {
+    const amount = Number(budgetMatch[1]);
+    if (!Number.isNaN(amount)) {
+      patch.budget = budgetMatch[2] ? amount * 10000 : amount;
     }
   }
-  const themesSegment = segments.find((item) => item.includes('+'));
-  if (themesSegment) {
-    patch.themes = themesSegment.split(/[+＋]/).map((item) => item.trim()).filter(Boolean);
+
+  // 同行人
+  const companionsPatterns: { regex: RegExp; label: string }[] = [
+    { regex: /带(孩子|宝宝|小孩|儿子|女儿)/, label: '带孩子' },
+    { regex: /(夫妻|情侣|爱人|伴侣)/, label: '情侣同行' },
+    { regex: /(朋友|闺蜜|兄弟)/, label: '朋友同行' },
+    { regex: /(父母|家人|全家|家庭)/, label: '家庭出行' },
+    { regex: /(同事|同伴|团队)/, label: '同事出行' }
+  ];
+  const foundCompanion = companionsPatterns.find((pattern) => pattern.regex.test(value));
+  if (foundCompanion) {
+    patch.companions = foundCompanion.label;
   }
-  const companionsSegment = segments.find((item) => item.includes('带') || item.includes('同行') || item.includes('家庭'));
-  if (companionsSegment) {
-    patch.companions = companionsSegment;
+
+  // 偏好
+  const themeKeywords = ['美食', '购物', '亲子', '动漫', '文化', '海岛', '自然', '雪景', '摄影', '历史', '徒步'];
+  const themes: string[] = [];
+  const likeMatch = value.match(/喜欢([^。；;，]+)/);
+  if (likeMatch?.[1]) {
+    likeMatch[1]
+      .split(/和|及|与|、|,|，/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .forEach((item) => themes.push(item));
   }
+  themeKeywords.forEach((keyword) => {
+    if (value.includes(keyword) && !themes.includes(keyword)) {
+      themes.push(keyword);
+    }
+  });
+  if (themes.length) {
+    patch.themes = themes;
+  }
+
   return patch;
 };
 interface PlannerForm extends TravelPreference {
@@ -215,6 +243,12 @@ const ItineraryPlanner = () => {
           />
         </label>
       </div>
+      {form.notes && (
+        <div className="voice-transcript">
+          <label>语音识别结果</label>
+          <textarea readOnly rows={2} value={form.notes} />
+        </div>
+      )}
       <label>
         备注
         <textarea
