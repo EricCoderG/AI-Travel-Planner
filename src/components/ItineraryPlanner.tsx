@@ -14,10 +14,10 @@ const parseVoiceTranscript = (value: string, current: PlannerForm): Partial<Plan
   const normalized = value.replace(/[，。,、]/g, ' ');
 
   // 目的地：寻找“去XXX”模式，避免误捕后续文本
-  const destinationRegex = /去(?<dest>[\u4e00-\u9fa5A-Za-z\s]{1,20})(?:玩|旅游|旅行)?/;
+  const destinationRegex = /去([\u4e00-\u9fa5A-Za-z\s]{1,20})(?:玩|旅游|旅行)?/;
   const destinationMatch = normalized.match(destinationRegex);
-  if (destinationMatch?.groups?.dest) {
-    patch.destination = destinationMatch.groups.dest.trim();
+  if (destinationMatch?.[1]) {
+    patch.destination = destinationMatch[1].trim();
   }
 
   // 时间：日期或天数

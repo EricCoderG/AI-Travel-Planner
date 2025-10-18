@@ -94,8 +94,9 @@ const normalizeItems = (items: any[], preference: TravelPreference, context: Nor
       const longitude = typeof item.longitude === 'number' ? item.longitude : undefined;
       const parsedFromLocation = parseLocationString(item.location);
       const parsedFromLatLng =
-        latitude !== undefined && longitude !== undefined ? [longitude, latitude] : undefined;
-      const coordinate = parsedFromLocation ?? parsedFromLatLng ?? context.lastCoordinate;
+        latitude !== undefined && longitude !== undefined ? ([longitude, latitude] as [number, number]) : undefined;
+      const coordinateCandidate = parsedFromLocation ?? parsedFromLatLng ?? context.lastCoordinate;
+      const coordinate = coordinateCandidate && coordinateCandidate.length === 2 ? (coordinateCandidate as [number, number]) : undefined;
       const location = coordinate ? toLocationString(coordinate) : undefined;
 
       const rawCategory = item.category ?? item.type;

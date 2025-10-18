@@ -107,3 +107,23 @@ create policy "Logs: user owns row"
 - 所有密钥都保存在浏览器 LocalStorage，不会上传到服务器。
 - 行程与预算依赖 Supabase 表，无 Supabase 登录时将无法创建或查看数据。
 - 运行 `npm run lint` 可以按需执行 ESLint 检查。
+
+## Docker 部署
+可通过 Docker 构建并发布镜像，方便他人直接拉取运行：
+
+```bash
+# 在项目根目录构建镜像
+docker build -t yourname/ai-travel-planner:latest .
+
+# 登录镜像仓库（以 Docker Hub 为例）
+docker login
+
+# 推送镜像
+docker push yourname/ai-travel-planner:latest
+
+# 其他人拉取并运行
+docker pull yourname/ai-travel-planner:latest
+docker run --rm -p 80:80 yourname/ai-travel-planner:latest
+```
+
+镜像使用 Nginx 托管 `dist` 静态资源，默认对外暴露 `80` 端口。
