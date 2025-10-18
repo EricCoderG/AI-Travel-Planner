@@ -15,7 +15,9 @@ const parseCoordinate = (value?: string): [number, number] | null => {
   }
   const parts = value.split(',').map((item) => Number(item.trim()));
   if (parts.length === 2 && parts.every((num) => Number.isFinite(num))) {
-    return [parts[0], parts[1]];
+    const [first, second] = parts;
+    const looksLikeLatFirst = Math.abs(first) <= 90 && Math.abs(second) <= 180;
+    return looksLikeLatFirst ? [second, first] : [first, second];
   }
   return null;
 };
@@ -24,7 +26,9 @@ const MapSection = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const polylineRef = useRef<any | null>(null);
   const amapKey = useSettingsStore((state) => state.amapApiKey);
+  const securityCode = useSettingsStore((state) => state.amapSecurityCode);
   const { plans, activePlanId } = usePlannerStore((state) => ({ plans: state.plans, activePlanId: state.activePlanId }));
 
   const activePlan = useMemo(() => plans.find((item) => item.id === activePlanId) ?? plans[0], [plans, activePlanId]);
@@ -32,6 +36,12 @@ const MapSection = () => {
   useEffect(() => {
     if (!amapKey || !containerRef.current) {
       return;
+    }
+
+    if (securityCode) {
+      (window as any)._AMapSecurityConfig = {
+        securityJsCode: securityCode
+      };
     }
 
     const loadScript = () =>
@@ -72,6 +82,10 @@ const MapSection = () => {
     }
     markersRef.current.forEach((marker) => marker.setMap(null));
     markersRef.current = [];
+    if (polylineRef.current) {
+      polylineRef.current.setMap(null);
+      polylineRef.current = null;
+    }
 
     if (!activePlan) {
       return;
@@ -95,7 +109,16 @@ const MapSection = () => {
     });
 
     if (coordinates.length) {
-      mapRef.current.setFitView();
+      polylineRef.current = new window.AMap.Polyline({
+        path: coordinates,
+        strokeColor: '#2563eb',
+        strokeWeight: 3,
+        strokeOpacity: 0.8,
+        lineJoin: 'round',
+        lineCap: 'round'
+      });
+      polylineRef.current.setMap(mapRef.current);
+      mapRef.current.setFitView([...markersRef.current, polylineRef.current], false, [80, 80, 80, 80]);
     }
   }, [activePlan]);
 

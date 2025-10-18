@@ -5,12 +5,14 @@ export interface SettingsState {
   supabaseUrl: string;
   supabaseKey: string;
   amapApiKey: string;
+  amapSecurityCode: string;
   voicePreferred: boolean;
   defaultCurrency: string;
   setDoubaoApiKey: (value: string) => void;
   setSupabaseUrl: (value: string) => void;
   setSupabaseKey: (value: string) => void;
   setAmapApiKey: (value: string) => void;
+  setAmapSecurityCode: (value: string) => void;
   setVoicePreferred: (value: boolean) => void;
   setDefaultCurrency: (value: string) => void;
   hydrate: () => void;
@@ -36,14 +38,14 @@ const loadSettings = (): Partial<SettingsState> => {
 
 export const useSettingsStore = create<SettingsState>((set, get) => {
   const persist = () => {
-    const { doubaoApiKey, supabaseUrl, supabaseKey, amapApiKey, voicePreferred, defaultCurrency } = get();
+    const { doubaoApiKey, supabaseUrl, supabaseKey, amapApiKey, amapSecurityCode, voicePreferred, defaultCurrency } = get();
     if (typeof window === 'undefined') {
       return;
     }
     try {
       window.localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ doubaoApiKey, supabaseUrl, supabaseKey, amapApiKey, voicePreferred, defaultCurrency })
+        JSON.stringify({ doubaoApiKey, supabaseUrl, supabaseKey, amapApiKey, amapSecurityCode, voicePreferred, defaultCurrency })
       );
     } catch (error) {
       console.error('保存设置失败', error);
@@ -55,6 +57,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     supabaseUrl: '',
     supabaseKey: '',
     amapApiKey: '',
+    amapSecurityCode: '',
     voicePreferred: false,
     defaultCurrency: 'CNY',
     setDoubaoApiKey: (value: string) => {
@@ -71,6 +74,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     },
     setAmapApiKey: (value: string) => {
       set({ amapApiKey: value });
+      persist();
+    },
+    setAmapSecurityCode: (value: string) => {
+      set({ amapSecurityCode: value });
       persist();
     },
     setVoicePreferred: (value: boolean) => {

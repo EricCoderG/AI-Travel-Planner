@@ -67,17 +67,36 @@ export const buildPrompt = (preference: TravelPreference): string => {
   ].join('\n');
 };
 
-const normalizeItems = (items: any[], preference: TravelPreference): ItineraryItem[] => {
+interface NormalizeContext {
+  lastCoordinate?: [number, number];
+}
+
+const parseLocationString = (value?: string): [number, number] | null => {
+  if (!value) {
+    return null;
+  }
+  const parts = value.split(',').map((item) => Number(item.trim()));
+  if (parts.length !== 2 || parts.some((part) => Number.isNaN(part) || !Number.isFinite(part))) {
+    return null;
+  }
+  const [first, second] = parts;
+  const looksLikeLatFirst = Math.abs(first) <= 90 && Math.abs(second) <= 180;
+  return looksLikeLatFirst ? [second, first] : [first, second];
+};
+
+const toLocationString = (coord: [number, number]) => `${coord[0]},${coord[1]}`;
+
+const normalizeItems = (items: any[], preference: TravelPreference, context: NormalizeContext): ItineraryItem[] => {
   return items
     .filter(Boolean)
     .map((item) => {
       const latitude = typeof item.latitude === 'number' ? item.latitude : undefined;
       const longitude = typeof item.longitude === 'number' ? item.longitude : undefined;
-      const location = item.location
-        ? item.location
-        : latitude !== undefined && longitude !== undefined
-          ? `${longitude},${latitude}`
-          : undefined;
+      const parsedFromLocation = parseLocationString(item.location);
+      const parsedFromLatLng =
+        latitude !== undefined && longitude !== undefined ? [longitude, latitude] : undefined;
+      const coordinate = parsedFromLocation ?? parsedFromLatLng ?? context.lastCoordinate;
+      const location = coordinate ? toLocationString(coordinate) : undefined;
 
       const rawCategory = item.category ?? item.type;
       const category: ItineraryItem['category'] = ['交通', '景点', '餐饮', '住宿', '其他'].includes(rawCategory)
@@ -99,6 +118,13 @@ const normalizeItems = (items: any[], preference: TravelPreference): ItineraryIt
         cost,
         location
       } satisfies ItineraryItem;
+    })
+    .map((entry) => {
+      const coord = parseLocationString(entry.location ?? undefined);
+      if (coord) {
+        context.lastCoordinate = coord;
+      }
+      return entry;
     });
 };
 
@@ -134,6 +160,7 @@ const parsePlan = (content: string, preference: TravelPreference): DoubaoPlanRes
     const jsonStart = content.indexOf('{');
     const jsonEnd = content.lastIndexOf('}');
     const payload = JSON.parse(content.slice(jsonStart, jsonEnd + 1));
+    const context: NormalizeContext = {};
     const days: ItineraryDay[] = Array.isArray(payload.days)
       ? payload.days.map((day: any) => {
           const rawItemsSource = Array.isArray(day.items)
@@ -148,7 +175,7 @@ const parsePlan = (content: string, preference: TravelPreference): DoubaoPlanRes
           const dateString = typeof rawDate === 'string' && rawDate.length ? rawDate : preference.startDate;
           return {
             date: dateString,
-            items: normalizeItems(rawItems, preference)
+            items: normalizeItems(rawItems, preference, context)
           };
         })
       : [];

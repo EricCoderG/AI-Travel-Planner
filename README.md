@@ -32,6 +32,7 @@ AI Travel Planner 是一个纯前端的旅行智能助手，通过豆包大模�
 | 豆包 API Key | 生成 AI 行程 | 设置 → 豆包 API Key |
 | Supabase Project URL / API Key | 登录、云端同步 | 设置 → Supabase 配置 |
 | 高德地图 Web JS API Key | 载入地图与工具栏 | 设置 → 高德地图 API Key |
+| 高德地图 Security JS Code | 启用新版安全校验时必填 | 设置 → 高德安全码 |
 
 ### Supabase 最低表结构示例（需启用行级策略）
 ```sql

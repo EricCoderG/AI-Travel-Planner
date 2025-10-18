@@ -8,6 +8,7 @@ const SettingsPanel = () => {
     supabaseUrl: settings.supabaseUrl,
     supabaseKey: settings.supabaseKey,
     amapApiKey: settings.amapApiKey,
+    amapSecurityCode: settings.amapSecurityCode,
     defaultCurrency: settings.defaultCurrency,
     voicePreferred: settings.voicePreferred
   });
@@ -18,6 +19,7 @@ const SettingsPanel = () => {
     settings.setSupabaseUrl(localState.supabaseUrl.trim());
     settings.setSupabaseKey(localState.supabaseKey.trim());
     settings.setAmapApiKey(localState.amapApiKey.trim());
+    settings.setAmapSecurityCode(localState.amapSecurityCode.trim());
     settings.setDefaultCurrency(localState.defaultCurrency.trim());
     settings.setVoicePreferred(localState.voicePreferred);
     alert('设置已保存到本地浏览器');
@@ -58,6 +60,14 @@ const SettingsPanel = () => {
           value={localState.amapApiKey}
           onChange={(event) => setLocalState((prev) => ({ ...prev, amapApiKey: event.target.value }))}
           placeholder="请在高德开放平台注册"
+        />
+      </label>
+      <label>
+        高德安全码 (Security JS Code)
+        <input
+          value={localState.amapSecurityCode}
+          onChange={(event) => setLocalState((prev) => ({ ...prev, amapSecurityCode: event.target.value }))}
+          placeholder="如已在高德启用安全设置，请填写"
         />
       </label>
       <label>

@@ -1,16 +1,24 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import PlanViewer from '../components/PlanViewer';
 import MapSection from '../components/MapSection';
 import { usePlannerStore } from '../store/usePlannerStore';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { buildPrompt, requestItineraryPlan } from '../services/doubao';
 
 const PlanDetailPage = () => {
   const { planId } = useParams<{ planId: string }>();
-  const { plans, budgets, setActivePlan } = usePlannerStore((state) => ({
+  const { plans, budgets, setActivePlan, updatePlan, replaceBudgetsForPlan, logAiGeneration } = usePlannerStore((state) => ({
     plans: state.plans,
     budgets: state.budgets,
-    setActivePlan: state.setActivePlan
+    setActivePlan: state.setActivePlan,
+    updatePlan: state.updatePlan,
+    replaceBudgetsForPlan: state.replaceBudgetsForPlan,
+    logAiGeneration: state.logAiGeneration
   }));
+  const doubaoKey = useSettingsStore((state) => state.doubaoApiKey);
+  const [regenerateMessage, setRegenerateMessage] = useState<string | undefined>();
 
   const planExists = useMemo(() => plans.some((plan) => plan.id === planId), [plans, planId]);
   const planCurrency = useMemo(
@@ -31,6 +39,30 @@ const PlanDetailPage = () => {
       setActivePlan(planId);
     }
   }, [planId, planExists, setActivePlan]);
+
+  const activePlan = useMemo(() => plans.find((plan) => plan.id === planId), [plans, planId]);
+
+  const regenerateMutation = useMutation({
+    mutationFn: async () => {
+      if (!activePlan) {
+        throw new Error('未找到行程');
+      }
+      if (!doubaoKey) {
+        throw new Error('请先在设置中填写豆包 API Key');
+      }
+      const prompt = buildPrompt(activePlan.preference);
+      const result = await requestItineraryPlan(activePlan.preference, doubaoKey, prompt);
+      await updatePlan({ ...activePlan, days: result.days, estimatedBudget: result.estimatedBudget });
+      await replaceBudgetsForPlan(activePlan.id, result.budgets);
+      await logAiGeneration({ planId: activePlan.id, prompt, response: result.rawContent });
+    },
+    onSuccess: () => {
+      setRegenerateMessage('AI 已重新生成行程与预算');
+    },
+    onError: (error: unknown) => {
+      setRegenerateMessage((error as Error).message);
+    }
+  });
 
   if (!planId) {
     return (
@@ -53,6 +85,20 @@ const PlanDetailPage = () => {
   return (
     <div className="page">
       <h1>行程详情</h1>
+      <div className="plan-detail-actions">
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            setRegenerateMessage(undefined);
+            regenerateMutation.mutate();
+          }}
+          disabled={regenerateMutation.isPending}
+        >
+          {regenerateMutation.isPending ? 'AI 正在重新生成...' : '重新生成 AI 行程'}
+        </button>
+        {regenerateMessage && <p className="hint">{regenerateMessage}</p>}
+      </div>
       <PlanViewer />
       <section className="card">
         <h2>预算拆分</h2>
