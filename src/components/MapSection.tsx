@@ -16,8 +16,8 @@ const parseCoordinate = (value?: string): [number, number] | null => {
   const parts = value.split(',').map((item) => Number(item.trim()));
   if (parts.length === 2 && parts.every((num) => Number.isFinite(num))) {
     const [first, second] = parts;
-    const looksLikeLatFirst = Math.abs(first) <= 90 && Math.abs(second) <= 180;
-    return looksLikeLatFirst ? [second, first] : [first, second];
+    const swapNeeded = Math.abs(first) <= 60 && Math.abs(second) >= 60 && Math.abs(second) <= 180;
+    return swapNeeded ? [second, first] : [first, second];
   }
   return null;
 };

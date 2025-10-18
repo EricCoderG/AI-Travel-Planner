@@ -80,8 +80,8 @@ const parseLocationString = (value?: string): [number, number] | null => {
     return null;
   }
   const [first, second] = parts;
-  const looksLikeLatFirst = Math.abs(first) <= 90 && Math.abs(second) <= 180;
-  return looksLikeLatFirst ? [second, first] : [first, second];
+  const swapNeeded = Math.abs(first) <= 60 && Math.abs(second) >= 60 && Math.abs(second) <= 180;
+  return swapNeeded ? [second, first] : [first, second];
 };
 
 const toLocationString = (coord: [number, number]) => `${coord[0]},${coord[1]}`;
@@ -204,7 +204,8 @@ export const requestItineraryPlan = async (
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'ep-m-20251017162015-5bs96',
+      model: 'doubao-1-5-pro-256k-250115',
+      max_tokens: 10000,
       messages: [
         {
           role: 'system',
